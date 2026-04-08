@@ -2,25 +2,25 @@
 <html lang="en" dir="auto" data-theme="auto">
 
 <head>
-	<meta name="generator" content="Hugo 0.160.0"><script src="/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=livereload" data-no-instant defer></script><meta charset="utf-8">
+	<meta name="generator" content="Hugo 0.160.0"><meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<meta name="robots" content="noindex, nofollow">
-<title>My New Hugo Project</title>
+<meta name="robots" content="index, follow">
+<title>olivierbabasse blog</title>
 
 <meta name="description" content="">
 <meta name="author" content="">
-<link rel="canonical" href="http://localhost:1313/">
+<link rel="canonical" href="https://olivierbabasse.github.io/">
 <link crossorigin="anonymous" href="/assets/css/stylesheet.199042e659bc7245f5609d333d6c044eb554a0640849bb874e1dff8eb0f57209.css" integrity="sha256-GZBC5lm8ckX1YJ0zPWwETrVUoGQISbuHTh3/jrD1cgk=" rel="preload stylesheet" as="style">
-<link rel="icon" href="http://localhost:1313/favicon.ico">
-<link rel="icon" type="image/png" sizes="16x16" href="http://localhost:1313/favicon-16x16.png">
-<link rel="icon" type="image/png" sizes="32x32" href="http://localhost:1313/favicon-32x32.png">
-<link rel="apple-touch-icon" href="http://localhost:1313/apple-touch-icon.png">
-<link rel="mask-icon" href="http://localhost:1313/safari-pinned-tab.svg">
+<link rel="icon" href="https://olivierbabasse.github.io/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://olivierbabasse.github.io/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://olivierbabasse.github.io/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://olivierbabasse.github.io/apple-touch-icon.png">
+<link rel="mask-icon" href="https://olivierbabasse.github.io/safari-pinned-tab.svg">
 <meta name="theme-color" content="#2e2e33">
 <meta name="msapplication-TileColor" content="#2e2e33">
-<link rel="alternate" type="application/rss+xml" href="http://localhost:1313/index.xml" title="rss">
-<link rel="alternate" hreflang="en" href="http://localhost:1313/">
+<link rel="alternate" type="application/rss+xml" href="https://olivierbabasse.github.io/index.xml" title="rss">
+<link rel="alternate" hreflang="en" href="https://olivierbabasse.github.io/">
 <noscript>
     <style>
         #theme-toggle,
@@ -72,13 +72,34 @@
         document.querySelector("html").dataset.theme = 'light';
     }
 
+</script><meta property="og:url" content="https://olivierbabasse.github.io/">
+  <meta property="og:site_name" content="olivierbabasse blog">
+  <meta property="og:title" content="olivierbabasse blog">
+  <meta property="og:locale" content="en_us">
+  <meta property="og:type" content="website">
+
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="olivierbabasse blog">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "olivierbabasse blog",
+  "url": "https://olivierbabasse.github.io/",
+  "description": "",
+  "logo": "https://olivierbabasse.github.io/favicon.ico",
+  "sameAs": [
+      
+  ]
+}
 </script>
 </head>
 <body class="list" id="top">
     <header class="header">
     <nav class="nav">
         <div class="logo">
-            <a href="http://localhost:1313/" accesskey="h" title="My New Hugo Project (Alt + H)">My New Hugo Project</a>
+            <a href="https://olivierbabasse.github.io/" accesskey="h" title="olivierbabasse blog (Alt + H)">olivierbabasse blog</a>
             <div class="logo-switches">
                 <button id="theme-toggle" accesskey="t" title="(Alt + T)" aria-label="Toggle theme">
                     <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
@@ -110,6 +131,19 @@
 
 <article class="first-entry"> 
   <header class="entry-header">
+    <h2 class="entry-hint-parent">Optimizing a simple word count tool (WC-style) implementation in rust
+    </h2>
+  </header>
+  <div class="entry-content">
+    <p>Context System wc is the kind of tool you assume is already fast because it’s been shipping on Unix for 50 years, but it turns out that on modern hardware a careful implementation can beat it by an order of magnitude. I started with a naive rust implementation of the default mode of wc challenge (see https://codingchallenges.fyi/challenges/challenge-wc) and tried to improve performance, benchmarking against a naive implementation and system wc command. I decided to work on ASCII mode only to keep things simple and focused, counting chars, words and lines. Benchmarking will be done using hyperfine with 3 warmups and 10 runs on a 1GB test file to have meaningful execution times.
+...</p>
+  </div>
+  <footer class="entry-footer"><span title='2026-04-08 09:51:22 +0200 CEST'>April 8, 2026</span></footer>
+  <a class="entry-link" aria-label="post link to Optimizing a simple word count tool (WC-style) implementation in rust" href="https://olivierbabasse.github.io/posts/wcrs/"></a>
+</article>
+
+<article class="post-entry"> 
+  <header class="entry-header">
     <h2 class="entry-hint-parent">Hello
     </h2>
   </header>
@@ -118,12 +152,12 @@
 </p>
   </div>
   <footer class="entry-footer"><span title='2026-04-07 23:01:58 +0200 CEST'>April 7, 2026</span></footer>
-  <a class="entry-link" aria-label="post link to Hello" href="http://localhost:1313/posts/hello/"></a>
+  <a class="entry-link" aria-label="post link to Hello" href="https://olivierbabasse.github.io/posts/hello/"></a>
 </article>
     </main>
     
 <footer class="footer">
-        <span>&copy; 2026 <a href="http://localhost:1313/">My New Hugo Project</a></span> · 
+        <span>&copy; 2026 <a href="https://olivierbabasse.github.io/">olivierbabasse blog</a></span> · 
 
     <span>
         Powered by

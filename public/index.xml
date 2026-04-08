@@ -1,18 +1,29 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
-    <title>My New Hugo Project</title>
-    <link>http://localhost:1313/</link>
-    <description>Recent content on My New Hugo Project</description>
+    <title>olivierbabasse blog</title>
+    <link>https://olivierbabasse.github.io/</link>
+    <description>Recent content on olivierbabasse blog</description>
     <generator>Hugo</generator>
     <language>en-us</language>
-    <lastBuildDate>Tue, 07 Apr 2026 23:01:58 +0200</lastBuildDate>
-    <atom:link href="http://localhost:1313/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Wed, 08 Apr 2026 09:51:22 +0200</lastBuildDate>
+    <atom:link href="https://olivierbabasse.github.io/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Optimizing a simple word count tool (WC-style) implementation in rust</title>
+      <link>https://olivierbabasse.github.io/posts/wcrs/</link>
+      <pubDate>Wed, 08 Apr 2026 09:51:22 +0200</pubDate>
+      <guid>https://olivierbabasse.github.io/posts/wcrs/</guid>
+      <description>&lt;h1 id=&#34;context&#34;&gt;Context&lt;/h1&gt;
+&lt;p&gt;System wc is the kind of tool you assume is already fast because it&amp;rsquo;s been shipping on Unix for 50 years, but it turns out that on modern hardware a careful implementation can beat it by an order of magnitude.
+I started with a naive rust implementation of the default mode of wc challenge (see &lt;a href=&#34;https://codingchallenges.fyi/challenges/challenge-wc&#34;&gt;https://codingchallenges.fyi/challenges/challenge-wc&lt;/a&gt;) and tried to improve performance, benchmarking against a naive implementation and system wc command.
+I decided to work on ASCII mode only to keep things simple and focused, counting chars, words and lines.
+Benchmarking will be done using hyperfine with 3 warmups and 10 runs on a 1GB test file to have meaningful execution times.&lt;/p&gt;</description>
+    </item>
     <item>
       <title>Hello</title>
-      <link>http://localhost:1313/posts/hello/</link>
+      <link>https://olivierbabasse.github.io/posts/hello/</link>
       <pubDate>Tue, 07 Apr 2026 23:01:58 +0200</pubDate>
-      <guid>http://localhost:1313/posts/hello/</guid>
+      <guid>https://olivierbabasse.github.io/posts/hello/</guid>
       <description>&lt;p&gt;Hello World !&lt;/p&gt;</description>
     </item>
   </channel>

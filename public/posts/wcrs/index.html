@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en" dir="auto" data-theme="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>Optimizing a simple word count tool (WC-style) implementation in rust | olivierbabasse blog</title>
+<meta name="keywords" content="">
+<meta name="description" content="Context
+System wc is the kind of tool you assume is already fast because it&rsquo;s been shipping on Unix for 50 years, but it turns out that on modern hardware a careful implementation can beat it by an order of magnitude.
+I started with a naive rust implementation of the default mode of wc challenge (see https://codingchallenges.fyi/challenges/challenge-wc) and tried to improve performance, benchmarking against a naive implementation and system wc command.
+I decided to work on ASCII mode only to keep things simple and focused, counting chars, words and lines.
+Benchmarking will be done using hyperfine with 3 warmups and 10 runs on a 1GB test file to have meaningful execution times.">
+<meta name="author" content="">
+<link rel="canonical" href="https://olivierbabasse.github.io/posts/wcrs/">
+<link crossorigin="anonymous" href="/assets/css/stylesheet.199042e659bc7245f5609d333d6c044eb554a0640849bb874e1dff8eb0f57209.css" integrity="sha256-GZBC5lm8ckX1YJ0zPWwETrVUoGQISbuHTh3/jrD1cgk=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://olivierbabasse.github.io/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://olivierbabasse.github.io/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://olivierbabasse.github.io/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://olivierbabasse.github.io/apple-touch-icon.png">
+<link rel="mask-icon" href="https://olivierbabasse.github.io/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" hreflang="en" href="https://olivierbabasse.github.io/posts/wcrs/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+                color-scheme: dark;
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .toc {
+                background: var(--entry);
+            }
+        }
+
+        @media (prefers-color-scheme: light) {
+            .list::-webkit-scrollbar-thumb {
+                border-color: var(--code-bg);
+            }
+        }
+
+    </style>
+</noscript>
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else if (localStorage.getItem("pref-theme") === "light") {
+       document.querySelector("html").dataset.theme = 'light';
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else {
+        document.querySelector("html").dataset.theme = 'light';
+    }
+
+</script><meta property="og:url" content="https://olivierbabasse.github.io/posts/wcrs/">
+  <meta property="og:site_name" content="olivierbabasse blog">
+  <meta property="og:title" content="Optimizing a simple word count tool (WC-style) implementation in rust">
+  <meta property="og:description" content="Context System wc is the kind of tool you assume is already fast because it’s been shipping on Unix for 50 years, but it turns out that on modern hardware a careful implementation can beat it by an order of magnitude. I started with a naive rust implementation of the default mode of wc challenge (see https://codingchallenges.fyi/challenges/challenge-wc) and tried to improve performance, benchmarking against a naive implementation and system wc command. I decided to work on ASCII mode only to keep things simple and focused, counting chars, words and lines. Benchmarking will be done using hyperfine with 3 warmups and 10 runs on a 1GB test file to have meaningful execution times.">
+  <meta property="og:locale" content="en_us">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="posts">
+    <meta property="article:published_time" content="2026-04-08T09:51:22+02:00">
+    <meta property="article:modified_time" content="2026-04-08T09:51:22+02:00">
+
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Optimizing a simple word count tool (WC-style) implementation in rust">
+  <meta name="twitter:description" content="Context System wc is the kind of tool you assume is already fast because it’s been shipping on Unix for 50 years, but it turns out that on modern hardware a careful implementation can beat it by an order of magnitude. I started with a naive rust implementation of the default mode of wc challenge (see https://codingchallenges.fyi/challenges/challenge-wc) and tried to improve performance, benchmarking against a naive implementation and system wc command. I decided to work on ASCII mode only to keep things simple and focused, counting chars, words and lines. Benchmarking will be done using hyperfine with 3 warmups and 10 runs on a 1GB test file to have meaningful execution times.">
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position":  1 ,
+      "name": "Posts",
+      "item": "https://olivierbabasse.github.io/posts/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "Optimizing a simple word count tool (WC-style) implementation in rust",
+      "item": "https://olivierbabasse.github.io/posts/wcrs/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Optimizing a simple word count tool (WC-style) implementation in rust",
+  "name": "Optimizing a simple word count tool (WC-style) implementation in rust",
+  "description": "Context System wc is the kind of tool you assume is already fast because it\u0026rsquo;s been shipping on Unix for 50 years, but it turns out that on modern hardware a careful implementation can beat it by an order of magnitude. I started with a naive rust implementation of the default mode of wc challenge (see https://codingchallenges.fyi/challenges/challenge-wc) and tried to improve performance, benchmarking against a naive implementation and system wc command. I decided to work on ASCII mode only to keep things simple and focused, counting chars, words and lines. Benchmarking will be done using hyperfine with 3 warmups and 10 runs on a 1GB test file to have meaningful execution times.\n",
+  "keywords": [
+    
+  ],
+  "articleBody": "Context System wc is the kind of tool you assume is already fast because it’s been shipping on Unix for 50 years, but it turns out that on modern hardware a careful implementation can beat it by an order of magnitude. I started with a naive rust implementation of the default mode of wc challenge (see https://codingchallenges.fyi/challenges/challenge-wc) and tried to improve performance, benchmarking against a naive implementation and system wc command. I decided to work on ASCII mode only to keep things simple and focused, counting chars, words and lines. Benchmarking will be done using hyperfine with 3 warmups and 10 runs on a 1GB test file to have meaningful execution times.\nSpoiler : I reached a 11x speedup on an old hardware and 40x on a more modern one, the limiting factor being available memory bandwidth.\nReference implementation I did my tests on my old MacBookPro early 2015 (Broadwell i5-5287U, macOS 12.7.6) : reference implementation /usr/bin/wc : 3.645s\nIn the last steps I also used a more modern Linux machine (i7-9700k, linux kernel 5.15) : reference implementation : 4.806s (yes, it’s slower than on my old macbook, unbelievable !)\nNaive implementation Reading the whole file in a buffer, I got the total size of the buffer then did two passes to count lines (looking for \\n) and words (looking for spaces)\nuse std::env; use std::fs; fn main() { let filename = env::args().nth(1).expect(\"Usage: wcrs \"); let data = fs::read(\u0026filename).expect(\"Could not read file\"); let bytes = data.len(); let lines = data.iter().filter(|\u0026\u0026b| b == b'\\n').count(); let words = data .split(|b| b.is_ascii_whitespace()) .filter(|w| !w.is_empty()) .count(); println!(\" {lines} {words} {bytes} {filename}\"); } Run time : 3.233s, which is already a bit faster than macOS reference implementation\nUsual release optimization options and CPU native code Adding the usual release options to Cargo.toml brings almost no gain :\n[profile.release] codegen-units = 1 lto = \"fat\" panic = \"abort\" debug = true strip = false I don’t gain any visible performance benefit yet. Note that I keep debug info in binary to have readable flamegraph/samply info. Next step is to target CPU native instruction set via .config/Cargo.toml :\n[build] rustflags = [\"-Ctarget-cpu=native\"] MBP : 3.002s Linux : 2.319s\nBuffered IO and single pass Adding some timing info shows allocating memory + reading is around 21%, line counting pass 7% and word counting pass 72%. We’ll start by reading data in 64KB chunks (avoiding the large alloc) and counting lines and words in a single pass.\nWhy 64 KB ? I tried with less (8, 16, 32), I tried with more (128… 1MB) and 64KB seems like a sweet spot (it’s a tiny bit faster). It’s certainly related to hardware, in particular cache size.\nWay less memory use and a 22% improvement mostly due to less allocating and doing one pass instead of two. MBP run time : 2.347s\nImproving newline counting with memchr A first easy-win : memchr crate provides memchr-like function using a SIMD implementation working on multiple bytes at once (32 with AVX2)\nMBP run time goes down to 2.015s, a 14% improvement\nBranchless word counting Now we work on word counting, the most CPU consuming part.\nif b.is_ascii_whitespace() { in_word = false; } else if !in_word { in_word = true; words += 1; } I tried to replace the “if” with branchless code because when branch prediction is not good, the CPU can waste a lot of time, but it did not improve things, even a bit slower on MBP : 2.129s\nfor \u0026b in chunk { let is_ws = b.is_ascii_whitespace(); words += (!is_ws \u0026\u0026 !in_word) as u64; in_word = !is_ws; } The explanation might be that we now have an additional eval/add sequence in every iteration and also because branch prediction is very accurate in this case (most bytes are not word separators).\nSIMD word counting Now things get interesting, big improvement potential here.\nThe idea here is to try to parallelize the checks done in the above loop. Using AVX2, we’d like to work on 32 chars at a time instead of 1.\nFirst we extract the word counting loop in its own function :\nfn count_words_scalar(chunk: \u0026[u8], in_word: \u0026mut bool) -\u003e u64 { let mut words: u64 = 0; let mut iw = *in_word; for \u0026b in chunk { if b.is_ascii_whitespace() { iw = false; } else if !iw { iw = true; words += 1; } } *in_word = iw; words } Then we start to work on a SIMD implementation. The code above counts “word starts” sequentially (in_word value going from false to true), keeping “in_word status” between chunks. We want to do the same thing on 32 bytes at a time.\nLooking at is_ascii_whitespace() implementation, we can see we have 6 possible word separators :\npub const fn is_ascii_whitespace(\u0026self) -\u003e bool { matches!(*self, b'\\t' | b'\\n' | b'\\x0C' | b'\\r' | b' ') } Using _mm256_set1_epi8, we create our whitespace masks :\nlet space = _mm256_set1_epi8(b' ' as i8); etc... We’ll then loop on 32 bytes chunks, loading them one after the other with _mm256_loadu_si256 :\nlet data = _mm256_loadu_si256(chunk.as_ptr().add(i) as *const __m256i); Using _mm256_cmpeq_epi8, we can find which of our 32-bytes equal a specific value, we’ll repeat this operation 6 times with all 6 separators and OR the results to get all separators in our 32 bytes :\nlet ws = _mm256_or_si256( _mm256_or_si256( _mm256_or_si256( _mm256_cmpeq_epi8(data, space), _mm256_cmpeq_epi8(data, tab), ), _mm256_or_si256( _mm256_cmpeq_epi8(data, newline), _mm256_cmpeq_epi8(data, cr), ), ), _mm256_or_si256( _mm256_cmpeq_epi8(data, vt), _mm256_cmpeq_epi8(data, ff), ), ); We get something like this :\nbytes: [H, e, l, l, o, ' ', w, o, r, l, d, \\n, T, h, i, s, ' ', i, s, ' ', a, ' ', t, e, s, t, \\n, ' ', ' ', f, o, o] ws: 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 1 0 0 1 0 1 0 0 0 0 1 1 1 0 0 0 (1 meaning 0xff)\nNow the trick is to find all word starts, ie the bytes which are NOT separators, but preceded by a separator :\nword_start = not_ws \u0026 (ws \u003c\u003c 1) We create the ws 32-bit value from our 32 bytes with _mm256_movemask_epi8 and it’s just some classical bit manipulation :\nws: 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 1 0 0 1 0 1 0 0 0 0 1 1 1 0 0 0 not_ws: 1 1 1 1 1 0 1 1 1 1 1 0 1 1 1 1 0 1 1 0 1 0 1 1 1 1 0 0 0 1 1 1 prev_ws: ? 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 1 0 0 1 0 1 0 0 0 0 1 1 1 0 0 0 (ws shifted right by 1) word_start: ? 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 1 0 0 1 0 1 0 0 0 0 0 0 0 1 0 0 (not_ws AND prev_ws) Last, we just have to count the 1-bits with count_ones() and forward in_word state to next block (it’s the last bit of the block).\nRemaining data (\u003c32 bytes) goes thru the sequential implementation\nOur SIMD implementation now looks like that :\n#[cfg(target_arch = \"x86_64\")] #[target_feature(enable = \"avx2\")] unsafe fn count_words_avx2(chunk: \u0026[u8], in_word: \u0026mut bool) -\u003e u64 { unsafe { let mut words: u64 = 0; let mut prev_ws_bit: u32 = if *in_word { 0 } else { 1 }; let space = _mm256_set1_epi8(b' ' as i8); let tab = _mm256_set1_epi8(b'\\t' as i8); let newline = _mm256_set1_epi8(b'\\n' as i8); let cr = _mm256_set1_epi8(b'\\r' as i8); let vt = _mm256_set1_epi8(0x0B as i8); let ff = _mm256_set1_epi8(0x0C as i8); let mut i = 0; let len = chunk.len(); while i + 32 \u003c= len { let data = _mm256_loadu_si256(chunk.as_ptr().add(i) as *const __m256i); let ws = _mm256_or_si256( _mm256_or_si256( _mm256_or_si256( _mm256_cmpeq_epi8(data, space), _mm256_cmpeq_epi8(data, tab), ), _mm256_or_si256( _mm256_cmpeq_epi8(data, newline), _mm256_cmpeq_epi8(data, cr), ), ), _mm256_or_si256( _mm256_cmpeq_epi8(data, vt), _mm256_cmpeq_epi8(data, ff), ), ); let ws_mask = _mm256_movemask_epi8(ws) as u32; let not_ws_mask = !ws_mask; let prev_was_ws = (ws_mask \u003c\u003c 1) | prev_ws_bit; let word_starts = not_ws_mask \u0026 prev_was_ws; words += word_starts.count_ones() as u64; prev_ws_bit = (ws_mask \u003e\u003e 31) \u0026 1; i += 32; } *in_word = prev_ws_bit == 0; words + count_words_scalar(\u0026chunk[i..], in_word) }} and to have our code support non AVX2 platforms :\nfn count_words(chunk: \u0026[u8], in_word: \u0026mut bool) -\u003e u64 { #[cfg(target_arch = \"x86_64\")] { if is_x86_feature_detected!(\"avx2\") { return unsafe { count_words_avx2(chunk, in_word) }; } } count_words_scalar(chunk, in_word) } The result is impressive with a run time of 273ms, almost 6 times faster with this step alone !\nIntegrating line counting within word counting loop Instead of reading memory twice (once with memchr, once with our SIMD loop), I did all in the SIMD loop. I reused the newline vector to directly count the number of newlines in input (_mm256_cmpeq_epi8/_mm256_movemask_epi8/count_ones).\nlet nl_cmp = _mm256_cmpeq_epi8(data, newline); let nl_mask = _mm256_movemask_epi8(nl_cmp) as u32; lines += nl_mask.count_ones() as u64; The gain is very small this time, with a run time of 260ms (with a 10ms error margin according to hyperfine, so I may even have gained nothing). Testing with a larger test file might help here.\nMBP: 273ms Linux: 168ms\nReplacing buffered reading with memory mapping Quite straightforward using mmap crate :\nlet file = File::open(\u0026filename)?; let mmap = unsafe { Mmap::map(\u0026file)? }; let data: \u0026[u8] = \u0026mmap; let bytes = data.len() as u64; ... Contrary to what I expected, using mmap() instead of read() made it almost 2 times slower on my macbook It might be due to the hardware (old and small TLB, small 4K memory pages) and to macOS mmap() implementation.\nI tried the same thing on my more “modern” linux machine and I could see some small improvements, going from 168ms to 156ms. I then tried to improve things using madvise() but the results did not improve.\nMBP: ~500ms Linux: 156ms\nParallel processing with rayon Even though mmap() makes things way slower at least on my macbook, it’s easier for a first implementation of parallel processing, so I’ll use it to map the file in memory.\nThen I divided data in chunks (one per available thread) and applied counting functions on them :\nfn count_chunk(chunk: \u0026[u8]) -\u003e ChunkResult { if chunk.is_empty() { return ChunkResult { words: 0, lines: 0, first_is_nonws: false, last_is_nonws: false }; } let mut in_word = false; let (words, lines) = count(chunk, \u0026mut in_word); ChunkResult { words, lines, first_is_nonws: !chunk[0].is_ascii_whitespace(), last_is_nonws: !chunk[chunk.len() - 1].is_ascii_whitespace(), } } When merging results, I had to pay attention to words which were split apart (chunk n ends on non-whitespace and chunk n+1 starts with non-whitespace) :\nlet results: Vec\u003cChunkResult\u003e = data .par_chunks(chunk_size) .map(count_chunk) .collect(); let mut lines: u64 = 0; let mut words: u64 = 0; for r in \u0026results { lines += r.lines; words += r.words; } for i in 1..results.len() { if results[i - 1].last_is_nonws \u0026\u0026 results[i].first_is_nonws { words -= 1; } } I got a run-time of around 256ms on macbook, almost the same thing than before mmap + rayon. Using mbw tool, I can see a max memory bandwidth of 4.8GB/s for my computer and we’re actually using 4GB/s\nOn linux, it’s running almost 3 times faster than before (58ms), but we have 8 real cores on this machine, so it’s not scaling linearly. In fact, we likely are already reaching memory bandwidth limit : I calculated an effective bandwidth of 17.6GB/s during the test, for a maximum of 20GB/s according to mbw tool.\nTODO : test it on same hardware with linux kernel 6.0 for large page cache support, it could improve thing (less page fault overhead maybe ?)\nMBP: 256ms Linux: 58ms\nConclusion Having reached almost 80-85% of memory bandwidth for both machines, it’s a bit hard to go further without kernel tweaking. Implementing UTF-8 support could make an interesting follow-up, putting more pressure on CPU.\nLet’s just celebrate the current gains compared to the naive implementation : MBP: 11.72x Linux: 40.25x\nFull source code on GitHub : https://github.com/olivierbabasse/wcrs\n",
+  "wordCount" : "2015",
+  "inLanguage": "en",
+  "datePublished": "2026-04-08T09:51:22+02:00",
+  "dateModified": "2026-04-08T09:51:22+02:00",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://olivierbabasse.github.io/posts/wcrs/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "olivierbabasse blog",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://olivierbabasse.github.io/favicon.ico"
+    }
+  }
+}
+</script>
+</head>
+<body id="top">
+    <header class="header">
+    <nav class="nav">
+        <div class="logo">
+            <a href="https://olivierbabasse.github.io/" accesskey="h" title="olivierbabasse blog (Alt + H)">olivierbabasse blog</a>
+            <div class="logo-switches">
+                <button id="theme-toggle" accesskey="t" title="(Alt + T)" aria-label="Toggle theme">
+                    <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                    <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <ul id="menu">
+        </ul>
+    </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    
+    <h1 class="post-title entry-hint-parent">
+      Optimizing a simple word count tool (WC-style) implementation in rust
+    </h1>
+    <div class="post-meta"><span title='2026-04-08 09:51:22 +0200 CEST'>April 8, 2026</span>
+
+</div>
+  </header> 
+  <div class="post-content"><h1 id="context">Context<a hidden class="anchor" aria-hidden="true" href="#context">#</a></h1>
+<p>System wc is the kind of tool you assume is already fast because it&rsquo;s been shipping on Unix for 50 years, but it turns out that on modern hardware a careful implementation can beat it by an order of magnitude.
+I started with a naive rust implementation of the default mode of wc challenge (see <a href="https://codingchallenges.fyi/challenges/challenge-wc">https://codingchallenges.fyi/challenges/challenge-wc</a>) and tried to improve performance, benchmarking against a naive implementation and system wc command.
+I decided to work on ASCII mode only to keep things simple and focused, counting chars, words and lines.
+Benchmarking will be done using hyperfine with 3 warmups and 10 runs on a 1GB test file to have meaningful execution times.</p>
+<p>Spoiler : I reached a 11x speedup on an old hardware and 40x on a more modern one, the limiting factor being available memory bandwidth.</p>
+<h1 id="reference-implementation">Reference implementation<a hidden class="anchor" aria-hidden="true" href="#reference-implementation">#</a></h1>
+<p>I did my tests on my old MacBookPro early 2015 (Broadwell i5-5287U, macOS 12.7.6) :
+reference implementation /usr/bin/wc : 3.645s</p>
+<p>In the last steps I also used a more modern Linux machine (i7-9700k, linux kernel 5.15) :
+reference implementation : 4.806s (yes, it&rsquo;s slower than on my old macbook, unbelievable !)</p>
+<h1 id="naive-implementation">Naive implementation<a hidden class="anchor" aria-hidden="true" href="#naive-implementation">#</a></h1>
+<p>Reading the whole file in a buffer, I got the total size of the buffer then did two passes to count lines (looking for \n) and words (looking for spaces)</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-rust" data-lang="rust"><span style="display:flex;"><span><span style="color:#66d9ef">use</span> std::env;
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">use</span> std::fs;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">fn</span> <span style="color:#a6e22e">main</span>() {
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> filename <span style="color:#f92672">=</span> env::args().nth(<span style="color:#ae81ff">1</span>).expect(<span style="color:#e6db74">&#34;Usage: wcrs &lt;filename&gt;&#34;</span>);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> data <span style="color:#f92672">=</span> fs::read(<span style="color:#f92672">&amp;</span>filename).expect(<span style="color:#e6db74">&#34;Could not read file&#34;</span>);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> bytes <span style="color:#f92672">=</span> data.len();
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> lines <span style="color:#f92672">=</span> data.iter().filter(<span style="color:#f92672">|&amp;&amp;</span>b<span style="color:#f92672">|</span> b <span style="color:#f92672">==</span> <span style="color:#e6db74">b</span><span style="color:#e6db74">&#39;\n&#39;</span>).count();
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> words <span style="color:#f92672">=</span> data
+</span></span><span style="display:flex;"><span>        .split(<span style="color:#f92672">|</span>b<span style="color:#f92672">|</span> b.is_ascii_whitespace())
+</span></span><span style="display:flex;"><span>        .filter(<span style="color:#f92672">|</span>w<span style="color:#f92672">|</span> <span style="color:#f92672">!</span>w.is_empty())
+</span></span><span style="display:flex;"><span>        .count();
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">println!</span>(<span style="color:#e6db74">&#34;  </span><span style="color:#e6db74">{lines}</span><span style="color:#e6db74">  </span><span style="color:#e6db74">{words}</span><span style="color:#e6db74"> </span><span style="color:#e6db74">{bytes}</span><span style="color:#e6db74"> </span><span style="color:#e6db74">{filename}</span><span style="color:#e6db74">&#34;</span>);
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Run time : 3.233s, which is already a bit faster than macOS reference implementation</p>
+<h1 id="usual-release-optimization-options-and-cpu-native-code">Usual release optimization options and CPU native code<a hidden class="anchor" aria-hidden="true" href="#usual-release-optimization-options-and-cpu-native-code">#</a></h1>
+<p>Adding the usual release options to Cargo.toml brings almost no gain :</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-toml" data-lang="toml"><span style="display:flex;"><span>[<span style="color:#a6e22e">profile</span>.<span style="color:#a6e22e">release</span>]
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">codegen-units</span> = <span style="color:#ae81ff">1</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">lto</span> = <span style="color:#e6db74">&#34;fat&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">panic</span> = <span style="color:#e6db74">&#34;abort&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">debug</span> = <span style="color:#66d9ef">true</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">strip</span> = <span style="color:#66d9ef">false</span>
+</span></span></code></pre></div><p>I don&rsquo;t gain any visible performance benefit yet.
+Note that I keep debug info in binary to have readable flamegraph/samply info.
+Next step is to target CPU native instruction set via .config/Cargo.toml :</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-toml" data-lang="toml"><span style="display:flex;"><span>[<span style="color:#a6e22e">build</span>]
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">rustflags</span> = [<span style="color:#e6db74">&#34;-Ctarget-cpu=native&#34;</span>]
+</span></span></code></pre></div><p>MBP : 3.002s
+Linux : 2.319s</p>
+<h1 id="buffered-io-and-single-pass">Buffered IO and single pass<a hidden class="anchor" aria-hidden="true" href="#buffered-io-and-single-pass">#</a></h1>
+<p>Adding some timing info shows allocating memory + reading is around 21%, line counting pass 7% and word counting pass 72%.
+We&rsquo;ll start by reading data in 64KB chunks (avoiding the large alloc) and counting lines and words in a single pass.</p>
+<p>Why 64 KB ? I tried with less (8, 16, 32), I tried with more (128&hellip; 1MB) and 64KB seems like a sweet spot (it&rsquo;s a tiny bit faster). It&rsquo;s certainly related to hardware, in particular cache size.</p>
+<p>Way less memory use and a 22% improvement mostly due to less allocating and doing one pass instead of two.
+MBP run time : 2.347s</p>
+<h1 id="improving-newline-counting-with-memchr">Improving newline counting with memchr<a hidden class="anchor" aria-hidden="true" href="#improving-newline-counting-with-memchr">#</a></h1>
+<p>A first easy-win : memchr crate provides memchr-like function using a SIMD implementation working on multiple bytes at once (32 with AVX2)</p>
+<p>MBP run time goes down to 2.015s, a 14% improvement</p>
+<h1 id="branchless-word-counting">Branchless word counting<a hidden class="anchor" aria-hidden="true" href="#branchless-word-counting">#</a></h1>
+<p>Now we work on word counting, the most CPU consuming part.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-rust" data-lang="rust"><span style="display:flex;"><span><span style="color:#66d9ef">if</span> b.is_ascii_whitespace() {
+</span></span><span style="display:flex;"><span>    in_word <span style="color:#f92672">=</span> <span style="color:#66d9ef">false</span>;
+</span></span><span style="display:flex;"><span>} <span style="color:#66d9ef">else</span> <span style="color:#66d9ef">if</span> <span style="color:#f92672">!</span>in_word {
+</span></span><span style="display:flex;"><span>    in_word <span style="color:#f92672">=</span> <span style="color:#66d9ef">true</span>;
+</span></span><span style="display:flex;"><span>    words <span style="color:#f92672">+=</span> <span style="color:#ae81ff">1</span>;
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>I tried to replace the &ldquo;if&rdquo; with branchless code because when branch prediction is not good, the CPU can waste a lot of time, but it did not improve things, even a bit slower on MBP : 2.129s</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-rust" data-lang="rust"><span style="display:flex;"><span><span style="color:#66d9ef">for</span> <span style="color:#f92672">&amp;</span>b <span style="color:#66d9ef">in</span> chunk {
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> is_ws <span style="color:#f92672">=</span> b.is_ascii_whitespace();
+</span></span><span style="display:flex;"><span>    words <span style="color:#f92672">+=</span> (<span style="color:#f92672">!</span>is_ws <span style="color:#f92672">&amp;&amp;</span> <span style="color:#f92672">!</span>in_word) <span style="color:#66d9ef">as</span> <span style="color:#66d9ef">u64</span>;
+</span></span><span style="display:flex;"><span>    in_word <span style="color:#f92672">=</span> <span style="color:#f92672">!</span>is_ws;
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>The explanation might be that we now have an additional eval/add sequence in every iteration and also because branch prediction is very accurate in this case (most bytes are not word separators).</p>
+<h1 id="simd-word-counting">SIMD word counting<a hidden class="anchor" aria-hidden="true" href="#simd-word-counting">#</a></h1>
+<p>Now things get interesting, big improvement potential here.</p>
+<p>The idea here is to try to parallelize the checks done in the above loop. Using AVX2, we&rsquo;d like to work on 32 chars at a time instead of 1.</p>
+<p>First we extract the word counting loop in its own function :</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-rust" data-lang="rust"><span style="display:flex;"><span><span style="color:#66d9ef">fn</span> <span style="color:#a6e22e">count_words_scalar</span>(chunk: <span style="color:#66d9ef">&amp;</span>[<span style="color:#66d9ef">u8</span>], in_word: <span style="color:#66d9ef">&amp;</span><span style="color:#a6e22e">mut</span> <span style="color:#66d9ef">bool</span>) -&gt; <span style="color:#66d9ef">u64</span> {
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> <span style="color:#66d9ef">mut</span> words: <span style="color:#66d9ef">u64</span> <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>;
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> <span style="color:#66d9ef">mut</span> iw <span style="color:#f92672">=</span> <span style="color:#f92672">*</span>in_word;
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">for</span> <span style="color:#f92672">&amp;</span>b <span style="color:#66d9ef">in</span> chunk {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">if</span> b.is_ascii_whitespace() {
+</span></span><span style="display:flex;"><span>            iw <span style="color:#f92672">=</span> <span style="color:#66d9ef">false</span>;
+</span></span><span style="display:flex;"><span>        } <span style="color:#66d9ef">else</span> <span style="color:#66d9ef">if</span> <span style="color:#f92672">!</span>iw {
+</span></span><span style="display:flex;"><span>            iw <span style="color:#f92672">=</span> <span style="color:#66d9ef">true</span>;
+</span></span><span style="display:flex;"><span>            words <span style="color:#f92672">+=</span> <span style="color:#ae81ff">1</span>;
+</span></span><span style="display:flex;"><span>        }
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">*</span>in_word <span style="color:#f92672">=</span> iw;
+</span></span><span style="display:flex;"><span>    words
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Then we start to work on a SIMD implementation. The code above counts &ldquo;word starts&rdquo; sequentially (in_word value going from false to true), keeping &ldquo;in_word status&rdquo; between chunks. We want to do the same thing on 32 bytes at a time.</p>
+<p>Looking at is_ascii_whitespace() implementation, we can see we have 6 possible word separators :</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-rust" data-lang="rust"><span style="display:flex;"><span><span style="color:#66d9ef">pub</span> <span style="color:#66d9ef">const</span> <span style="color:#66d9ef">fn</span> <span style="color:#a6e22e">is_ascii_whitespace</span>(<span style="color:#f92672">&amp;</span>self) -&gt; <span style="color:#66d9ef">bool</span> {
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">matches!</span>(<span style="color:#f92672">*</span>self, <span style="color:#e6db74">b</span><span style="color:#e6db74">&#39;\t&#39;</span> <span style="color:#f92672">|</span> <span style="color:#e6db74">b</span><span style="color:#e6db74">&#39;\n&#39;</span> <span style="color:#f92672">|</span> <span style="color:#e6db74">b</span><span style="color:#e6db74">&#39;\x0C&#39;</span> <span style="color:#f92672">|</span> <span style="color:#e6db74">b</span><span style="color:#e6db74">&#39;\r&#39;</span> <span style="color:#f92672">|</span> <span style="color:#e6db74">b</span><span style="color:#e6db74">&#39; &#39;</span>)
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Using _mm256_set1_epi8, we create our whitespace masks :</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-rust" data-lang="rust"><span style="display:flex;"><span><span style="color:#66d9ef">let</span> space <span style="color:#f92672">=</span> _mm256_set1_epi8(<span style="color:#e6db74">b</span><span style="color:#e6db74">&#39; &#39;</span> <span style="color:#66d9ef">as</span> <span style="color:#66d9ef">i8</span>);
+</span></span><span style="display:flex;"><span>etc<span style="color:#f92672">..</span>.
+</span></span></code></pre></div><p>We&rsquo;ll then loop on 32 bytes chunks, loading them one after the other with _mm256_loadu_si256 :</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-rust" data-lang="rust"><span style="display:flex;"><span><span style="color:#66d9ef">let</span> data <span style="color:#f92672">=</span> _mm256_loadu_si256(chunk.as_ptr().add(i) <span style="color:#66d9ef">as</span> <span style="color:#f92672">*</span><span style="color:#66d9ef">const</span> __m256i);
+</span></span></code></pre></div><p>Using _mm256_cmpeq_epi8, we can find which of our 32-bytes equal a specific value, we&rsquo;ll repeat this operation 6 times with all 6 separators and OR the results to get all separators in our 32 bytes :</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-rust" data-lang="rust"><span style="display:flex;"><span><span style="color:#66d9ef">let</span> ws <span style="color:#f92672">=</span> _mm256_or_si256(
+</span></span><span style="display:flex;"><span>    _mm256_or_si256(
+</span></span><span style="display:flex;"><span>        _mm256_or_si256(
+</span></span><span style="display:flex;"><span>            _mm256_cmpeq_epi8(data, space),
+</span></span><span style="display:flex;"><span>            _mm256_cmpeq_epi8(data, tab),
+</span></span><span style="display:flex;"><span>        ),
+</span></span><span style="display:flex;"><span>        _mm256_or_si256(
+</span></span><span style="display:flex;"><span>            _mm256_cmpeq_epi8(data, newline),
+</span></span><span style="display:flex;"><span>            _mm256_cmpeq_epi8(data, cr),
+</span></span><span style="display:flex;"><span>        ),
+</span></span><span style="display:flex;"><span>    ),
+</span></span><span style="display:flex;"><span>    _mm256_or_si256(
+</span></span><span style="display:flex;"><span>        _mm256_cmpeq_epi8(data, vt),
+</span></span><span style="display:flex;"><span>        _mm256_cmpeq_epi8(data, ff),
+</span></span><span style="display:flex;"><span>    ),
+</span></span><span style="display:flex;"><span>);
+</span></span></code></pre></div><p>We get something like this :</p>
+<pre tabindex="0"><code>bytes: [H, e, l, l, o, &#39; &#39;, w, o, r, l, d, \n, T, h, i, s, &#39; &#39;, i, s, &#39; &#39;, a, &#39; &#39;, t, e, s, t, \n, &#39; &#39;, &#39; &#39;, f, o, o]
+ws:     0  0  0  0  0   1   0  0  0  0  0   1  0  0  0  0   1   0  0   1   0   1   0  0  0  0   1   1    1   0  0  0
+</code></pre><p>(1 meaning 0xff)</p>
+<p>Now the trick is to find all word starts, ie the bytes which are NOT separators, but preceded by a separator :</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-rust" data-lang="rust"><span style="display:flex;"><span>word_start <span style="color:#f92672">=</span> not_ws <span style="color:#f92672">&amp;</span> (ws <span style="color:#f92672">&lt;&lt;</span> <span style="color:#ae81ff">1</span>)
+</span></span></code></pre></div><p>We create the ws 32-bit value from our 32 bytes with _mm256_movemask_epi8 and it&rsquo;s just some classical bit manipulation :</p>
+<pre tabindex="0"><code>ws:           0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 1 0 0 1 0 1 0 0 0 0 1 1 1 0 0 0
+not_ws:       1 1 1 1 1 0 1 1 1 1 1 0 1 1 1 1 0 1 1 0 1 0 1 1 1 1 0 0 0 1 1 1
+prev_ws:    ? 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 1 0 0 1 0 1 0 0 0 0 1 1 1 0 0 0  (ws shifted right by 1)
+word_start:   ? 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 1 0 0 1 0 1 0 0 0 0 0 0 0 1 0 0  (not_ws AND prev_ws)
+</code></pre><p>Last, we just have to count the 1-bits with count_ones() and forward in_word state to next block (it&rsquo;s the last bit of the block).</p>
+<p>Remaining data (&lt;32 bytes) goes thru the sequential implementation</p>
+<p>Our SIMD implementation now looks like that :</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-rust" data-lang="rust"><span style="display:flex;"><span><span style="color:#75715e">#[cfg(target_arch = </span><span style="color:#e6db74">&#34;x86_64&#34;</span><span style="color:#75715e">)]</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#[target_feature(enable = </span><span style="color:#e6db74">&#34;avx2&#34;</span><span style="color:#75715e">)]</span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">unsafe</span> <span style="color:#66d9ef">fn</span> <span style="color:#a6e22e">count_words_avx2</span>(chunk: <span style="color:#66d9ef">&amp;</span>[<span style="color:#66d9ef">u8</span>], in_word: <span style="color:#66d9ef">&amp;</span><span style="color:#a6e22e">mut</span> <span style="color:#66d9ef">bool</span>) -&gt; <span style="color:#66d9ef">u64</span> { <span style="color:#66d9ef">unsafe</span> {
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> <span style="color:#66d9ef">mut</span> words: <span style="color:#66d9ef">u64</span> <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>;
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> <span style="color:#66d9ef">mut</span> prev_ws_bit: <span style="color:#66d9ef">u32</span> <span style="color:#f92672">=</span> <span style="color:#66d9ef">if</span> <span style="color:#f92672">*</span>in_word { <span style="color:#ae81ff">0</span> } <span style="color:#66d9ef">else</span> { <span style="color:#ae81ff">1</span> };
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> space <span style="color:#f92672">=</span> _mm256_set1_epi8(<span style="color:#e6db74">b</span><span style="color:#e6db74">&#39; &#39;</span> <span style="color:#66d9ef">as</span> <span style="color:#66d9ef">i8</span>);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> tab <span style="color:#f92672">=</span> _mm256_set1_epi8(<span style="color:#e6db74">b</span><span style="color:#e6db74">&#39;\t&#39;</span> <span style="color:#66d9ef">as</span> <span style="color:#66d9ef">i8</span>);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> newline <span style="color:#f92672">=</span> _mm256_set1_epi8(<span style="color:#e6db74">b</span><span style="color:#e6db74">&#39;\n&#39;</span> <span style="color:#66d9ef">as</span> <span style="color:#66d9ef">i8</span>);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> cr <span style="color:#f92672">=</span> _mm256_set1_epi8(<span style="color:#e6db74">b</span><span style="color:#e6db74">&#39;\r&#39;</span> <span style="color:#66d9ef">as</span> <span style="color:#66d9ef">i8</span>);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> vt <span style="color:#f92672">=</span> _mm256_set1_epi8(<span style="color:#ae81ff">0x0B</span> <span style="color:#66d9ef">as</span> <span style="color:#66d9ef">i8</span>);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> ff <span style="color:#f92672">=</span> _mm256_set1_epi8(<span style="color:#ae81ff">0x0C</span> <span style="color:#66d9ef">as</span> <span style="color:#66d9ef">i8</span>);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> <span style="color:#66d9ef">mut</span> i <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>;
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> len <span style="color:#f92672">=</span> chunk.len();
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">while</span> i <span style="color:#f92672">+</span> <span style="color:#ae81ff">32</span> <span style="color:#f92672">&lt;=</span> len {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">let</span> data <span style="color:#f92672">=</span> _mm256_loadu_si256(chunk.as_ptr().add(i) <span style="color:#66d9ef">as</span> <span style="color:#f92672">*</span><span style="color:#66d9ef">const</span> __m256i);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">let</span> ws <span style="color:#f92672">=</span> _mm256_or_si256(
+</span></span><span style="display:flex;"><span>            _mm256_or_si256(
+</span></span><span style="display:flex;"><span>                _mm256_or_si256(
+</span></span><span style="display:flex;"><span>                    _mm256_cmpeq_epi8(data, space),
+</span></span><span style="display:flex;"><span>                    _mm256_cmpeq_epi8(data, tab),
+</span></span><span style="display:flex;"><span>                ),
+</span></span><span style="display:flex;"><span>                _mm256_or_si256(
+</span></span><span style="display:flex;"><span>                    _mm256_cmpeq_epi8(data, newline),
+</span></span><span style="display:flex;"><span>                    _mm256_cmpeq_epi8(data, cr),
+</span></span><span style="display:flex;"><span>                ),
+</span></span><span style="display:flex;"><span>            ),
+</span></span><span style="display:flex;"><span>            _mm256_or_si256(
+</span></span><span style="display:flex;"><span>                _mm256_cmpeq_epi8(data, vt),
+</span></span><span style="display:flex;"><span>                _mm256_cmpeq_epi8(data, ff),
+</span></span><span style="display:flex;"><span>            ),
+</span></span><span style="display:flex;"><span>        );
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">let</span> ws_mask <span style="color:#f92672">=</span> _mm256_movemask_epi8(ws) <span style="color:#66d9ef">as</span> <span style="color:#66d9ef">u32</span>;
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">let</span> not_ws_mask <span style="color:#f92672">=</span> <span style="color:#f92672">!</span>ws_mask;
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">let</span> prev_was_ws <span style="color:#f92672">=</span> (ws_mask <span style="color:#f92672">&lt;&lt;</span> <span style="color:#ae81ff">1</span>) <span style="color:#f92672">|</span> prev_ws_bit;
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">let</span> word_starts <span style="color:#f92672">=</span> not_ws_mask <span style="color:#f92672">&amp;</span> prev_was_ws;
+</span></span><span style="display:flex;"><span>        words <span style="color:#f92672">+=</span> word_starts.count_ones() <span style="color:#66d9ef">as</span> <span style="color:#66d9ef">u64</span>;
+</span></span><span style="display:flex;"><span>        prev_ws_bit <span style="color:#f92672">=</span> (ws_mask <span style="color:#f92672">&gt;&gt;</span> <span style="color:#ae81ff">31</span>) <span style="color:#f92672">&amp;</span> <span style="color:#ae81ff">1</span>;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>        i <span style="color:#f92672">+=</span> <span style="color:#ae81ff">32</span>;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">*</span>in_word <span style="color:#f92672">=</span> prev_ws_bit <span style="color:#f92672">==</span> <span style="color:#ae81ff">0</span>;
+</span></span><span style="display:flex;"><span>    words <span style="color:#f92672">+</span> count_words_scalar(<span style="color:#f92672">&amp;</span>chunk[i<span style="color:#f92672">..</span>], in_word)
+</span></span><span style="display:flex;"><span>}}
+</span></span></code></pre></div><p>and to have our code support non AVX2 platforms :</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-rust" data-lang="rust"><span style="display:flex;"><span><span style="color:#66d9ef">fn</span> <span style="color:#a6e22e">count_words</span>(chunk: <span style="color:#66d9ef">&amp;</span>[<span style="color:#66d9ef">u8</span>], in_word: <span style="color:#66d9ef">&amp;</span><span style="color:#a6e22e">mut</span> <span style="color:#66d9ef">bool</span>) -&gt; <span style="color:#66d9ef">u64</span> {
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">#[cfg(target_arch = </span><span style="color:#e6db74">&#34;x86_64&#34;</span><span style="color:#75715e">)]</span>
+</span></span><span style="display:flex;"><span>    {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">is_x86_feature_detected!</span>(<span style="color:#e6db74">&#34;avx2&#34;</span>) {
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">unsafe</span> { count_words_avx2(chunk, in_word) };
+</span></span><span style="display:flex;"><span>        }
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    count_words_scalar(chunk, in_word)
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>The result is impressive with a run time of 273ms, almost 6 times faster with this step alone !</p>
+<h1 id="integrating-line-counting-within-word-counting-loop">Integrating line counting within word counting loop<a hidden class="anchor" aria-hidden="true" href="#integrating-line-counting-within-word-counting-loop">#</a></h1>
+<p>Instead of reading memory twice (once with memchr, once with our SIMD loop), I did all in the SIMD loop.
+I reused the newline vector to directly count the number of newlines in input (_mm256_cmpeq_epi8/_mm256_movemask_epi8/count_ones).</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-rust" data-lang="rust"><span style="display:flex;"><span><span style="color:#66d9ef">let</span> nl_cmp <span style="color:#f92672">=</span> _mm256_cmpeq_epi8(data, newline);
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">let</span> nl_mask <span style="color:#f92672">=</span> _mm256_movemask_epi8(nl_cmp) <span style="color:#66d9ef">as</span> <span style="color:#66d9ef">u32</span>;
+</span></span><span style="display:flex;"><span>lines <span style="color:#f92672">+=</span> nl_mask.count_ones() <span style="color:#66d9ef">as</span> <span style="color:#66d9ef">u64</span>;
+</span></span></code></pre></div><p>The gain is very small this time, with a run time of 260ms (with a 10ms error margin according to hyperfine, so I may even have gained nothing).
+Testing with a larger test file might help here.</p>
+<p>MBP: 273ms
+Linux: 168ms</p>
+<h1 id="replacing-buffered-reading-with-memory-mapping">Replacing buffered reading with memory mapping<a hidden class="anchor" aria-hidden="true" href="#replacing-buffered-reading-with-memory-mapping">#</a></h1>
+<p>Quite straightforward using mmap crate :</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-rust" data-lang="rust"><span style="display:flex;"><span><span style="color:#66d9ef">let</span> file <span style="color:#f92672">=</span> File::open(<span style="color:#f92672">&amp;</span>filename)<span style="color:#f92672">?</span>;
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">let</span> mmap <span style="color:#f92672">=</span> <span style="color:#66d9ef">unsafe</span> { Mmap::map(<span style="color:#f92672">&amp;</span>file)<span style="color:#f92672">?</span> };
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">let</span> data: <span style="color:#66d9ef">&amp;</span>[<span style="color:#66d9ef">u8</span>] <span style="color:#f92672">=</span> <span style="color:#f92672">&amp;</span>mmap;
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">let</span> bytes <span style="color:#f92672">=</span> data.len() <span style="color:#66d9ef">as</span> <span style="color:#66d9ef">u64</span>;
+</span></span><span style="display:flex;"><span><span style="color:#f92672">..</span>.
+</span></span></code></pre></div><p>Contrary to what I expected, using mmap() instead of read() made it almost 2 times slower on my macbook
+It might be due to the hardware (old and small TLB, small 4K memory pages) and to macOS mmap() implementation.</p>
+<p>I tried the same thing on my more &ldquo;modern&rdquo; linux machine and I could see some small improvements, going from 168ms to 156ms. I then tried to improve things using madvise() but the results did not improve.</p>
+<p>MBP: ~500ms
+Linux: 156ms</p>
+<h1 id="parallel-processing-with-rayon">Parallel processing with rayon<a hidden class="anchor" aria-hidden="true" href="#parallel-processing-with-rayon">#</a></h1>
+<p>Even though mmap() makes things way slower at least on my macbook, it&rsquo;s easier for a first implementation of parallel processing, so I&rsquo;ll use it to map the file in memory.</p>
+<p>Then I divided data in chunks (one per available thread) and applied counting functions on them :</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-rust" data-lang="rust"><span style="display:flex;"><span><span style="color:#66d9ef">fn</span> <span style="color:#a6e22e">count_chunk</span>(chunk: <span style="color:#66d9ef">&amp;</span>[<span style="color:#66d9ef">u8</span>]) -&gt; <span style="color:#a6e22e">ChunkResult</span> {
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> chunk.is_empty() {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> ChunkResult { words: <span style="color:#ae81ff">0</span>, lines: <span style="color:#ae81ff">0</span>, first_is_nonws: <span style="color:#a6e22e">false</span>, last_is_nonws: <span style="color:#a6e22e">false</span> };
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> <span style="color:#66d9ef">mut</span> in_word <span style="color:#f92672">=</span> <span style="color:#66d9ef">false</span>;
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> (words, lines) <span style="color:#f92672">=</span> count(chunk, <span style="color:#f92672">&amp;</span><span style="color:#66d9ef">mut</span> in_word);
+</span></span><span style="display:flex;"><span>    ChunkResult {
+</span></span><span style="display:flex;"><span>        words,
+</span></span><span style="display:flex;"><span>        lines,
+</span></span><span style="display:flex;"><span>        first_is_nonws: <span style="color:#f92672">!</span>chunk[<span style="color:#ae81ff">0</span>].is_ascii_whitespace(),
+</span></span><span style="display:flex;"><span>        last_is_nonws: <span style="color:#f92672">!</span>chunk[chunk.len() <span style="color:#f92672">-</span> <span style="color:#ae81ff">1</span>].is_ascii_whitespace(),
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>When merging results, I had to pay attention to words which were split apart (chunk n ends on non-whitespace and chunk n+1 starts with non-whitespace) :</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-rust" data-lang="rust"><span style="display:flex;"><span><span style="color:#66d9ef">let</span> results: Vec<span style="color:#f92672">&lt;</span>ChunkResult<span style="color:#f92672">&gt;</span> <span style="color:#f92672">=</span> data
+</span></span><span style="display:flex;"><span>    .par_chunks(chunk_size)
+</span></span><span style="display:flex;"><span>    .map(count_chunk)
+</span></span><span style="display:flex;"><span>    .collect();
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">let</span> <span style="color:#66d9ef">mut</span> lines: <span style="color:#66d9ef">u64</span> <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>;
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">let</span> <span style="color:#66d9ef">mut</span> words: <span style="color:#66d9ef">u64</span> <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>;
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">for</span> r <span style="color:#66d9ef">in</span> <span style="color:#f92672">&amp;</span>results {
+</span></span><span style="display:flex;"><span>    lines <span style="color:#f92672">+=</span> r.lines;
+</span></span><span style="display:flex;"><span>    words <span style="color:#f92672">+=</span> r.words;
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">for</span> i <span style="color:#66d9ef">in</span> <span style="color:#ae81ff">1</span><span style="color:#f92672">..</span>results.len() {
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> results[i <span style="color:#f92672">-</span> <span style="color:#ae81ff">1</span>].last_is_nonws <span style="color:#f92672">&amp;&amp;</span> results[i].first_is_nonws {
+</span></span><span style="display:flex;"><span>        words <span style="color:#f92672">-=</span> <span style="color:#ae81ff">1</span>;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>I got a run-time of around 256ms on macbook, almost the same thing than before mmap + rayon.
+Using mbw tool, I can see a max memory bandwidth of 4.8GB/s for my computer and we&rsquo;re actually using 4GB/s</p>
+<p>On linux, it&rsquo;s running almost 3 times faster than before (58ms), but we have 8 real cores on this machine, so it&rsquo;s not scaling linearly. In fact, we likely are already reaching memory bandwidth limit : I calculated an effective bandwidth of 17.6GB/s during the test, for a maximum of 20GB/s according to mbw tool.</p>
+<p>TODO : test it on same hardware with linux kernel 6.0 for large page cache support, it could improve thing (less page fault overhead maybe ?)</p>
+<p>MBP: 256ms
+Linux: 58ms</p>
+<h1 id="conclusion">Conclusion<a hidden class="anchor" aria-hidden="true" href="#conclusion">#</a></h1>
+<p>Having reached almost 80-85% of memory bandwidth for both machines, it&rsquo;s a bit hard to go further without kernel tweaking.
+Implementing UTF-8 support could make an interesting follow-up, putting more pressure on CPU.</p>
+<p>Let&rsquo;s just celebrate the current gains compared to the naive implementation :
+MBP: 11.72x
+Linux: 40.25x</p>
+<p>Full source code on GitHub : <a href="https://github.com/olivierbabasse/wcrs">https://github.com/olivierbabasse/wcrs</a></p>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+    </ul>
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+        <span>&copy; 2026 <a href="https://olivierbabasse.github.io/">olivierbabasse blog</a></span> · 
+
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu');
+    if (menu) {
+        
+        const scrollPosition = localStorage.getItem("menu-scroll-position");
+        if (scrollPosition) {
+            menu.scrollLeft = parseInt(scrollPosition, 10);
+        }
+        
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        const html = document.querySelector("html");
+        if (html.dataset.theme === "dark") {
+            html.dataset.theme = 'light';
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            html.dataset.theme = 'dark';
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+</body>
+
+</html>
