@@ -1,20 +1,25 @@
-/* Widen article content on small-to-medium screens only */
-@media (max-width: 1280px) {
-  main.min-h-full,
-  main .max-w-prose,
-  article .prose {
+/* Widen content on large screens */
+@media (min-width: 1280px) {
+  body.max-w-7xl {
+    max-width: 96rem !important;
+    padding-left: 3rem !important;
+    padding-right: 3rem !important;
+  }
+  .max-w-prose {
+    max-width: 100ch !important;
+    width: 100% !important;
+  }
+  /* Code blocks uncapped — let them breathe */
+  article pre,
+  .article-content pre {
+    max-width: none !important;
+  }
+}
+
+/* Full width on small-medium screens */
+@media (max-width: 1279px) {
+  body.max-w-7xl,
+  .max-w-prose {
     max-width: 100% !important;
   }
-}
-
-/* On large screens, cap at a comfortable reading width */
-@media (min-width: 1281px) {
-  main.min-h-full {
-    max-width: 72rem !important;
-  }
-}
-
-/* Always let code blocks breathe — they suffer most from narrow widths */
-article pre {
-  max-width: 100% !important;
 }
