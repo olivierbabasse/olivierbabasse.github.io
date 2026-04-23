@@ -1,8 +1,0 @@
-baseURL = 'https://olivierbabasse.github.io/'
-locale = 'en-us'
-title = 'olivierbabasse blog'
-theme = "PaperMod"
-
-[caches]
-[caches.images]
-dir = ':cacheDir/images'
